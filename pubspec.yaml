@@ -1,0 +1,39 @@
+name: road_sos
+description: A production-ready Flutter app for road safety and monitoring.
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Sensors & Hardware
+  sensors_plus: ^7.0.0
+  geolocator: ^10.1.0
+  permission_handler: ^11.3.0
+  vibration: ^3.1.8
+  wakelock_plus: ^1.6.0
+  
+  # Maps & Background
+  google_maps_flutter: ^2.5.3
+  flutter_background_service: ^5.0.5
+
+  # UI & Design
+  google_fonts: ^6.1.0
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  riverpod_generator: ^2.3.9
+  build_runner: ^2.4.8
+
+flutter:
+  uses-material-design: true
