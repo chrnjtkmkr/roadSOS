@@ -11,6 +11,8 @@ import '../../../models/speed_data.dart';
 import '../../../models/crash_event.dart';
 import '../../../models/emergency_event.dart';
 import '../../../services/emergency_service.dart';
+import '../../../services/sensor_service.dart';
+import '../../../services/speed_service.dart';
 
 /// Screen that displays live sensor data from the device.
 /// Uses Material 3 design patterns and Riverpod for state.
@@ -30,6 +32,38 @@ class MonitoringScreen extends ConsumerWidget {
     final crashEvent = ref.watch(crashEventProvider);
     final emergencyAsync = ref.watch(emergencyStreamProvider);
 
+    // Update maximum G-Force reactively inside UI listeners
+    ref.listen<AsyncValue<GForceData>>(gForceStreamProvider, (previous, next) {
+      next.whenData((data) {
+        final currentMax = ref.read(maxGForceProvider);
+        if (data.gForce > currentMax) {
+          ref.read(maxGForceProvider.notifier).state = data.gForce;
+        }
+      });
+    });
+
+    // Update maximum Speed and Deceleration reactively inside UI listeners
+    ref.listen<AsyncValue<SpeedData>>(speedStreamProvider, (previous, next) {
+      next.whenData((data) {
+        final currentMaxSpeed = ref.read(maxSpeedProvider);
+        if (data.speed > currentMaxSpeed) {
+          ref.read(maxSpeedProvider.notifier).state = data.speed;
+        }
+
+        final currentMaxDecel = ref.read(maxDecelerationProvider);
+        if (data.deceleration < currentMaxDecel) {
+          ref.read(maxDecelerationProvider.notifier).state = data.deceleration;
+        }
+      });
+    });
+
+    // Listen to crash events to decide when to initiate countdown
+    ref.listen<CrashEvent>(crashEventProvider, (previous, next) {
+      if (next.confidenceScore >= 0.8 && next.maxGForce >= 5.0) {
+        ref.read(emergencyServiceProvider).initiateCountdown(next);
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Live Monitoring'),
@@ -43,6 +77,8 @@ class MonitoringScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildStatusCard(context),
+                const SizedBox(height: 16),
+                _buildSimulationControlCard(context, ref),
                 const SizedBox(height: 20),
                 _GForceMeterCard(
                   data: gForceAsync,
@@ -124,6 +160,141 @@ class MonitoringScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSimulationControlCard(BuildContext context, WidgetRef ref) {
+    final isSimulated = ref.watch(sensorSimulationProvider);
+
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: isSimulated 
+                ? [Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3), Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.2)]
+                : [Theme.of(context).colorScheme.surface, Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.2)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isSimulated ? Icons.auto_awesome : Icons.sensors,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Data Feed Source',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ],
+                ),
+                Switch(
+                  value: isSimulated,
+                  onChanged: (val) {
+                    ref.read(sensorSimulationProvider.notifier).state = val;
+                    // Reset simulator states on toggle
+                    SensorService.resetSimulation();
+                    SpeedService.resetSimulation();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isSimulated
+                  ? '🤖 Running Test Ride Simulator. Ideal for testing live G-force analysis and emergency triggers without moving.'
+                  : '🔌 Using Physical Device Sensors. Motion API access requires an HTTPS connection or localhost on mobile browsers.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            if (isSimulated) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // Trigger simulated crash spike
+                        SensorService.triggerSimulatedCrash();
+                        SpeedService.triggerSimulatedCrash();
+                        // Force refresh
+                        ref.invalidate(accelerometerProvider);
+                        ref.invalidate(gyroscopeProvider);
+                        ref.invalidate(gForceStreamProvider);
+                        ref.invalidate(speedStreamProvider);
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('💥 High-impact crash scenario triggered!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.flash_on, color: Colors.white),
+                      label: const Text('Simulate Crash Impact', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  TextButton.icon(
+                    onPressed: () {
+                      // Reset simulation to cruising state
+                      SensorService.resetSimulation();
+                      SpeedService.resetSimulation();
+                      // Force refresh
+                      ref.invalidate(accelerometerProvider);
+                      ref.invalidate(gyroscopeProvider);
+                      ref.invalidate(gForceStreamProvider);
+                      ref.invalidate(speedStreamProvider);
+                      // Reset max values
+                      ref.read(maxGForceProvider.notifier).state = 0.0;
+                      ref.read(maxSpeedProvider.notifier).state = 0.0;
+                      ref.read(maxDecelerationProvider.notifier).state = 0.0;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('🔄 Simulation reset to cruising ride.'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Reset'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

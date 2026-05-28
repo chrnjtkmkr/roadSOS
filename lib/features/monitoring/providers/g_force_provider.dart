@@ -14,33 +14,20 @@ final gForceServiceProvider = Provider<GForceService>((ref) {
 final gForceStreamProvider = StreamProvider.autoDispose<GForceData>((ref) {
   final sensorService = ref.watch(sensorServiceProvider);
   final gForceService = ref.watch(gForceServiceProvider);
+  final isSimulated = ref.watch(sensorSimulationProvider);
+
+  final rawStream = isSimulated
+      ? sensorService.getSimulatedRawAccelerometerStream()
+      : sensorService.rawAccelerometerStream;
 
   // Map raw accelerometer events to GForceData
-  return sensorService.rawAccelerometerStream.map(
+  return rawStream.map(
     (data) => gForceService.calculateGForce(data),
   );
 });
 
-/// Notifier to track the maximum G-force recorded during the session.
-/// This avoid circularity issues found in simple StateProviders.
-class MaxGForceNotifier extends AutoDisposeNotifier<double> {
-  @override
-  double build() {
-    // We listen to the G-force stream and update the state if a new max is found.
-    // ref.listen is safe here as it listens to a different provider.
-    ref.listen<AsyncValue<GForceData>>(gForceStreamProvider, (previous, next) {
-      next.whenData((data) {
-        if (data.gForce > state) {
-          state = data.gForce;
-        }
-      });
-    });
-    
-    return 0.0;
-  }
-}
-
 /// Provider for the max G-force value.
-final maxGForceProvider = NotifierProvider.autoDispose<MaxGForceNotifier, double>(() {
-  return MaxGForceNotifier();
+final maxGForceProvider = StateProvider.autoDispose<double>((ref) {
+  return 0.0;
 });
+

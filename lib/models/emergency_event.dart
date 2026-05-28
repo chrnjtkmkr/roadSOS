@@ -1,4 +1,4 @@
-import '../models/crash_event.dart';
+import 'crash_event.dart';
 
 /// Enum representing the state of the emergency countdown.
 enum EmergencyState {

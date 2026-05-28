@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'features/monitoring/screens/monitoring_screen.dart';
+import 'features/auth/screens/splash_screen.dart';
+import 'features/auth/screens/login_screen.dart';
+import 'features/dashboard/screens/main_layout.dart';
 
 void main() {
   // Required for plugin initialization if needed
@@ -46,8 +48,14 @@ class RoadSoSApp extends StatelessWidget {
       
       themeMode: ThemeMode.system, // Automatically switches based on OS
       
-      // Starting with the Monitoring Screen as requested
-      home: const MonitoringScreen(),
+      // Starting with the SplashScreen
+      home: const SplashScreen(),
+      
+      // Define named routes
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/main': (context) => const MainLayout(),
+      },
     );
   }
 }

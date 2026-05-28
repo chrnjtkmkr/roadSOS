@@ -17,52 +17,25 @@ final crashDetectionServiceProvider = Provider<CrashDetectionService>((ref) {
 class CrashNotifier extends AutoDisposeNotifier<CrashEvent> {
   @override
   CrashEvent build() {
-    // Current latest values from all sensors
-    GForceData? lastGForce;
-    SpeedData? lastSpeed;
-    SensorData? lastGyro;
+    // Watch G-Force, Speed, Gyroscope streams reactively
+    final gForceAsync = ref.watch(gForceStreamProvider);
+    final speedAsync = ref.watch(speedStreamProvider);
+    final gyroAsync = ref.watch(gyroscopeProvider);
 
-    // Listen to G-Force
-    ref.listen<AsyncValue<GForceData>>(gForceStreamProvider, (prev, next) {
-      next.whenData((data) {
-        lastGForce = data;
-        _evaluate(lastGForce, lastSpeed, lastGyro);
-      });
-    });
+    final gForce = gForceAsync.valueOrNull;
+    final speed = speedAsync.valueOrNull;
+    final gyro = gyroAsync.valueOrNull;
 
-    // Listen to Speed
-    ref.listen<AsyncValue<SpeedData>>(speedStreamProvider, (prev, next) {
-      next.whenData((data) {
-        lastSpeed = data;
-        _evaluate(lastGForce, lastSpeed, lastGyro);
-      });
-    });
-
-    // Listen to Gyroscope
-    ref.listen<AsyncValue<SensorData>>(gyroscopeProvider, (prev, next) {
-      next.whenData((data) {
-        lastGyro = data;
-        _evaluate(lastGForce, lastSpeed, lastGyro);
-      });
-    });
+    if (gForce != null && speed != null && gyro != null) {
+      final service = ref.read(crashDetectionServiceProvider);
+      return service.analyze(
+        gForceData: gForce,
+        speedData: speed,
+        gyroData: gyro,
+      );
+    }
 
     return CrashEvent.none();
-  }
-
-  void _evaluate(GForceData? g, SpeedData? s, SensorData? r) {
-    if (g != null && s != null && r != null) {
-      final service = ref.read(crashDetectionServiceProvider);
-      final newEvent = service.analyze(
-        gForceData: g,
-        speedData: s,
-        gyroData: r,
-      );
-      
-      // We only update the state if confidence is significant or if we need to reset
-      if (newEvent.confidenceScore > 0.1 || state.confidenceScore > 0) {
-        state = newEvent;
-      }
-    }
   }
 }
 

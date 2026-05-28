@@ -14,14 +14,5 @@ final emergencyServiceProvider = Provider<EmergencyService>((ref) {
 /// StreamProvider for the live emergency state.
 final emergencyStreamProvider = StreamProvider.autoDispose<EmergencyEvent>((ref) {
   final service = ref.watch(emergencyServiceProvider);
-  
-  // Listen to crash events to decide when to initiate countdown
-  ref.listen<CrashEvent>(crashEventProvider, (previous, next) {
-    if (next.confidenceScore >= 0.8 && next.maxGForce >= 5.0) {
-      // Trigger countdown if confidence is high and G-force is significant
-      service.initiateCountdown(next);
-    }
-  });
-
   return service.emergencyStream;
 });

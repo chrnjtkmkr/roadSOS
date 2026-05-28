@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:developer' as developer;
 import 'package:geolocator/geolocator.dart';
 import '../models/speed_data.dart';
@@ -81,6 +82,56 @@ class SpeedService {
 
       _lastData = newData;
       return newData;
+    });
+  }
+
+  // --- Simulation Support ---
+  static double _simulatedSpeedKmh = 72.0; // Cruising speed 72 km/h
+  static bool _isSimulatingCrash = false;
+  static DateTime? _crashStartTime;
+  static final _random = math.Random();
+
+  static void triggerSimulatedCrash() {
+    _isSimulatingCrash = true;
+    _crashStartTime = DateTime.now();
+  }
+
+  static void resetSimulation() {
+    _isSimulatingCrash = false;
+    _crashStartTime = null;
+    _simulatedSpeedKmh = 72.0;
+  }
+
+  Stream<SpeedData> getSimulatedSpeedStream() {
+    return Stream.periodic(const Duration(seconds: 1), (_) {
+      final now = DateTime.now();
+      double deceleration = 0.0;
+      
+      if (_isSimulatingCrash && _crashStartTime != null) {
+        final elapsed = now.difference(_crashStartTime!).inMilliseconds;
+        if (elapsed < 1000) {
+          // Instant decel (e.g. -20 m/s² deceleration, speed goes to 0)
+          deceleration = -20.0;
+          _simulatedSpeedKmh = 0.0;
+        } else {
+          deceleration = 0.0;
+          _simulatedSpeedKmh = 0.0;
+        }
+      } else {
+        // Cruising around 70-75 km/h with minor fluctuations
+        final change = (_random.nextDouble() - 0.5) * 4.0; // Speed change in km/h
+        _simulatedSpeedKmh = (_simulatedSpeedKmh + change).clamp(65.0, 85.0);
+        deceleration = (change / 3.6); // Convert km/h/s to m/s²
+      }
+
+      return SpeedData(
+        speed: _simulatedSpeedKmh,
+        latitude: 22.5726,
+        longitude: 88.3639,
+        timestamp: now,
+        deceleration: deceleration,
+        accuracy: 5.0,
+      );
     });
   }
 }
